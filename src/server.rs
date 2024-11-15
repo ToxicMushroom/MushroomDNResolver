@@ -1,9 +1,15 @@
 use crate::lookup;
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Error, Result};
 use hickory_resolver::proto::rr::RecordType;
-use hickory_resolver::TokioResolver;
+use hickory_resolver::{ResolveError, ResolveErrorKind, TokioResolver};
 use std::net::UdpSocket;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::ops::Deref;
+use hickory_resolver::lookup::Lookup;
+use hickory_resolver::proto::{ProtoError, ProtoErrorKind};
+use hickory_resolver::proto::rr::rdata::SVCB;
+use hickory_resolver::proto::rr::rdata::svcb::{SvcParamKey, SvcParamValue};
+use hickory_resolver::proto::serialize::binary::{BinEncodable, BinEncoder};
 
 pub struct BytePacketBuffer {
     pub buf: [u8; 512],
@@ -188,8 +194,8 @@ pub enum ResultCode {
     NOERROR = 0,
     FORMERR = 1,
     SERVFAIL = 2,
-    NXDOMAIN = 3,
-    NOTIMP = 4,
+    NXDOMAIN = 3, // Domain name does not exist
+    NOTIMP = 4, // Function not implemented
     REFUSED = 5,
 }
 
@@ -313,19 +319,25 @@ pub enum QueryType {
     A,     // 1
     NS,    // 2
     CNAME, // 5
+    PTR,   // 12
     MX,    // 15
     AAAA,  // 28
+    SRV,   // 3
+    HTTPS, // 65
 }
 
 impl QueryType {
     pub fn to_num(&self) -> u16 {
         match *self {
             QueryType::UNKNOWN(x) => x,
-            QueryType::A => 1,
-            QueryType::NS => 2,
-            QueryType::CNAME => 5,
-            QueryType::MX => 15,
-            QueryType::AAAA => 28,
+            QueryType::A => 1, // ipv4
+            QueryType::NS => 2, // nameserver
+            QueryType::CNAME => 5, // canonical name, points to another hostname, basically an alias
+            QueryType::PTR => 12, // reverse dns lookup
+            QueryType::MX => 15, // mailserver
+            QueryType::AAAA => 28, // ipv6 entries
+            QueryType::SRV => 33, // 
+            QueryType::HTTPS => 65,
         }
     }
 
@@ -334,8 +346,11 @@ impl QueryType {
             1 => QueryType::A,
             2 => QueryType::NS,
             5 => QueryType::CNAME,
+            12 => QueryType::PTR,
             15 => QueryType::MX,
             28 => QueryType::AAAA,
+            33 => QueryType::SRV,
+            65 => QueryType::HTTPS,
             _ => QueryType::UNKNOWN(num),
         }
     }
@@ -371,7 +386,7 @@ impl DnsQuestion {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum DnsRecord {
     UNKNOWN {
@@ -406,6 +421,26 @@ pub enum DnsRecord {
         addr: Ipv6Addr,
         ttl: u32,
     }, // 28
+    PTR {
+        domain: String,
+        target_domain: String,
+        ttl: u32,
+    },
+    SRV { // 33
+        domain: String,
+        priority: u16,
+        weight: u16,
+        port: u16,
+        target_domain: String,
+        ttl: u32,
+    },
+    HTTPS {
+        domain: String,
+        priority: u16,
+        target_domain: String,
+        svc_params: Vec<(SvcParamKey, SvcParamValue)>,
+        ttl: u32,
+    },
 }
 
 impl DnsRecord {
@@ -488,6 +523,45 @@ impl DnsRecord {
                     domain,
                     qtype: qtype_num,
                     data_len,
+                    ttl,
+                })
+            }
+            QueryType::PTR => {
+                let mut ptr_dname = String::new();
+
+                buffer.read_qname(&mut ptr_dname);
+                Ok(DnsRecord::PTR {
+                    domain,
+                    target_domain: ptr_dname,
+                    ttl,
+                })
+            }
+            QueryType::HTTPS => {
+                let priority = buffer.read_u16()?;
+                let mut target_domain = String::new();
+
+                buffer.read_qname(&mut target_domain);
+                Ok(DnsRecord::HTTPS {
+                    domain,
+                    priority,
+                    target_domain,
+                    svc_params: vec![],
+                    ttl,
+                })
+            }
+            QueryType::SRV => {
+                let priority = buffer.read_u16()?;
+                let weight = buffer.read_u16()?;
+                let port = buffer.read_u16()?;
+                let mut target_domain = String::new();
+
+                buffer.read_qname(&mut target_domain);
+                Ok(DnsRecord::SRV {
+                    domain,
+                    priority,
+                    weight,
+                    port,
+                    target_domain,
                     ttl,
                 })
             }
@@ -588,6 +662,71 @@ impl DnsRecord {
             }
             DnsRecord::UNKNOWN { .. } => {
                 println!("Skipping record: {:?}", self);
+            }
+            DnsRecord::PTR {
+                ref domain,
+                ref target_domain,
+                ttl
+            } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::PTR.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+            }
+            DnsRecord::HTTPS {
+                ref domain,
+                priority,
+                ref target_domain,
+                ttl,
+                ref svc_params
+            } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::HTTPS.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+
+                let pos = buffer.pos();
+                buffer.write_u16(0)?;
+
+                buffer.write_u16(priority)?;
+                buffer.write_qname(target_domain)?;
+
+                for (key, value) in svc_params{
+                    buffer.write_u16(u16::from(key.clone()))?;
+
+                    let mut out: Vec<u8> = vec![];
+                    value.emit(&mut BinEncoder::new(&mut out)).expect("to write to buff");
+                    for i in out {
+                        buffer.write_u8(i)?;
+                    }
+                }
+
+                let size = buffer.pos() - (pos + 2);
+                buffer.set_u16(pos, size as u16)?;
+            }
+            DnsRecord::SRV {
+                ref domain,
+                ref target_domain,
+                priority,
+                weight,
+                port,
+                ttl
+            } => {
+                buffer.write_qname(domain)?;
+                buffer.write_u16(QueryType::HTTPS.to_num())?;
+                buffer.write_u16(1)?;
+                buffer.write_u32(ttl)?;
+
+                let pos = buffer.pos();
+                buffer.write_u16(0)?;
+
+                buffer.write_u16(priority)?;
+                buffer.write_u16(weight)?;
+                buffer.write_u16(port)?;
+                buffer.write_qname(target_domain)?;
+
+                let size = buffer.pos() - (pos + 2);
+                buffer.set_u16(pos, size as u16)?;
             }
         }
 
@@ -824,56 +963,99 @@ async fn handle_query(socket: &UdpSocket, hickory_resolver: &TokioResolver) -> R
     if let Some(question) = request.questions.pop() {
         println!("Received query: {:?}", question);
 
-        if let Ok(result) = lookup::hickory_lookup(hickory_resolver, &question.name, question.qtype).await {
-            packet.questions.push(question.clone());
-            packet.header.rescode = ResultCode::NOERROR;
-            for rec in result {
-                println!("Answer: {:?}", rec);
-                match rec.record_type() {
-
-                    RecordType::A => {
-                        packet.answers.push(DnsRecord::A {
-                            domain: question.name.clone(),
-                            addr: rec.as_a().unwrap().0,
-                            ttl: 0,
-                        });
-                    }
-                    RecordType::NS => {
-                        packet.answers.push(DnsRecord::NS {
-                            domain: question.name.clone(),
-                            host: rec.as_ns().unwrap().0.to_ascii(),
-                            ttl: 0,
-                        });
-                    }
-                    RecordType::CNAME => {
-                        packet.answers.push(DnsRecord::CNAME {
-                            domain: question.name.clone(),
-                            host: rec.as_cname().unwrap().0.to_ascii(),
-                            ttl: 0,
-                        });
-                    }
-                    RecordType::MX => {
-                        packet.answers.push(DnsRecord::MX {
-                            domain: question.name.clone(),
-                            priority: rec.as_mx().unwrap().preference(),
-                            host: rec.as_mx().unwrap().exchange().to_ascii(),
-                            ttl: 0,
-                        });
-                    }
-                    RecordType::AAAA => {
-                        packet.answers.push(DnsRecord::AAAA {
-                            domain: question.name.clone(),
-                            addr: rec.as_aaaa().unwrap().0,
-                            ttl: 0,
-                        });
-                    }
-                    _ => {
-                        println!("Unhandled record type in resp: {:?}", rec);
+        let lookup_res = lookup::hickory_lookup(hickory_resolver, &question.name, question.qtype).await;
+        match lookup_res {
+            Ok(result) => {
+                packet.questions.push(question.clone());
+                packet.header.rescode = ResultCode::NOERROR;
+                for rec in result {
+                    println!("Answer: {:?}", rec);
+                    match rec.record_type() {
+                        RecordType::A => {
+                            packet.answers.push(DnsRecord::A {
+                                domain: question.name.clone(),
+                                addr: rec.as_a().unwrap().0,
+                                ttl: 5,
+                            });
+                        }
+                        RecordType::NS => {
+                            packet.answers.push(DnsRecord::NS {
+                                domain: question.name.clone(),
+                                host: rec.as_ns().unwrap().0.to_ascii(),
+                                ttl: 5,
+                            });
+                        }
+                        RecordType::CNAME => {
+                            packet.answers.push(DnsRecord::CNAME {
+                                domain: question.name.clone(),
+                                host: rec.as_cname().unwrap().0.to_ascii(),
+                                ttl: 5,
+                            });
+                        }
+                        RecordType::MX => {
+                            packet.answers.push(DnsRecord::MX {
+                                domain: question.name.clone(),
+                                priority: rec.as_mx().unwrap().preference(),
+                                host: rec.as_mx().unwrap().exchange().to_ascii(),
+                                ttl: 5,
+                            });
+                        }
+                        RecordType::AAAA => {
+                            packet.answers.push(DnsRecord::AAAA {
+                                domain: question.name.clone(),
+                                addr: rec.as_aaaa().unwrap().0,
+                                ttl: 5,
+                            });
+                        }
+                        RecordType::HTTPS => {
+                            packet.answers.push(DnsRecord::HTTPS {
+                                domain: question.name.clone(),
+                                priority: rec.as_https().unwrap().0.svc_priority(),
+                                target_domain: rec.as_https().unwrap().0.target_name().to_ascii(),
+                                svc_params: rec.as_https().unwrap().0.svc_params().to_vec(),
+                                ttl: 5,
+                            })
+                        }
+                        RecordType::PTR => {
+                            packet.answers.push(DnsRecord::PTR {
+                                target_domain: rec.as_ptr().unwrap().0.to_ascii(),
+                                domain: question.name.clone(),
+                                ttl: 5,
+                            })
+                        }
+                        _ => {
+                            println!("Unhandled record type in resp: {:?}", rec);
+                        }
                     }
                 }
             }
-        } else {
-            packet.header.rescode = ResultCode::SERVFAIL;
+            Err(err) => {
+                packet.header.rescode = ResultCode::SERVFAIL;
+                match &err {
+                    ResolveError => {
+                        match err.kind() {
+                            ResolveErrorKind::Message(_) => {}
+                            ResolveErrorKind::Msg(_) => {}
+                            ResolveErrorKind::Proto(thing) => {
+                                match thing {
+                                    ProtoError { kind, .. } => {
+                                        match kind.deref() {
+                                            ProtoErrorKind::NoRecordsFound { .. } => {
+                                                packet.header.rescode = ResultCode::NXDOMAIN;
+                                            }
+                                            _ => {
+                                                eprintln!("Failed to lookup because: {err:?}")
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
         }
     } else {
         packet.header.rescode = ResultCode::FORMERR;
@@ -881,6 +1063,7 @@ async fn handle_query(socket: &UdpSocket, hickory_resolver: &TokioResolver) -> R
 
     let mut res_buffer = BytePacketBuffer::new();
     packet.write(&mut res_buffer)?;
+    println!("  Resp to query: {:?} ", packet);
 
     let len = res_buffer.pos();
     let data = res_buffer.get_range(0, len)?;
