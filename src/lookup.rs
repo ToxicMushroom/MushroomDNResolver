@@ -1,12 +1,12 @@
-use crate::server::QueryType;
 use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup::Lookup;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::proto::xfer::Protocol;
 use hickory_resolver::{ResolveError, TokioResolver};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use hickory_proto::rr::LowerName;
 
-pub(crate) async fn hickory_lookup(resolver: &TokioResolver, x0: &String, query_type: QueryType) -> Result<Lookup, ResolveError> {
+pub(crate) async fn hickory_lookup(resolver: &TokioResolver, x0: &String, record_type: RecordType) -> Result<Lookup, ResolveError> {
     let mut resolver_opts = ResolverOpts::default();
     resolver_opts.try_tcp_on_error = false;
 
@@ -18,15 +18,5 @@ pub(crate) async fn hickory_lookup(resolver: &TokioResolver, x0: &String, query_
     } else {
         resolver
     };
-    final_resolver.lookup(x0, match query_type {
-        QueryType::UNKNOWN(a) => RecordType::Unknown(a),
-        QueryType::A => RecordType::A,
-        QueryType::NS => RecordType::NS,
-        QueryType::CNAME => RecordType::CNAME,
-        QueryType::MX => RecordType::MX,
-        QueryType::AAAA => RecordType::AAAA,
-        QueryType::PTR => RecordType::PTR,
-        QueryType::HTTPS => RecordType::HTTPS,
-        QueryType::SRV => RecordType::SRV
-    }).await
+    final_resolver.lookup(x0, record_type).await
 }
