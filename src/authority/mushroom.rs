@@ -1,4 +1,5 @@
 use hickory_proto::op::Header;
+use hickory_proto::rr::RecordType;
 use hickory_resolver::lookup::Lookup;
 use hickory_resolver::{ResolveError, TokioResolver};
 use crate::authority::{MessageResponse, MessageResponseBuilder};
@@ -20,10 +21,10 @@ impl RequestHandler for Mushroom {
             Ok(result) => {
                 response_handle.send_response(mb.build(
                     Header::response_from_request(request.header()),
-                    result.record_iter(),
-                    result.record_iter(),
-                    result.record_iter(),
-                    result.record_iter())
+                    result.record_iter().filter(|x1| x1.record_type() != RecordType::SOA && x1.record_type() != RecordType::NS),
+                    result.record_iter().filter(|x1| x1.record_type() == RecordType::SOA),
+                    result.record_iter().filter(|x1| x1.record_type() == RecordType::NS),
+                    vec![].into_iter())
                 ).await.expect("TODO: panic message")
             }
             Err(err) => {

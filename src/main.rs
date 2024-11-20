@@ -9,6 +9,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use anyhow::Error;
 use hickory_resolver::config::*;
 use hickory_resolver::TokioResolver;
+use sd_notify::NotifyState;
 use socket2::{Domain, Socket, Type};
 use tokio::net::UdpSocket;
 use tokio::runtime;
@@ -114,6 +115,9 @@ fn main() -> Result<(), String>{
     }
 
     info!("server starting up, awaiting connections...");
+    if (sd_notify::booted().unwrap_or(false)) {
+        sd_notify::notify(true, &[NotifyState::Ready]).unwrap();
+    }
     match runtime.block_on(server.block_until_done()) {
         Ok(()) => {
             // we're exiting for some reason...
