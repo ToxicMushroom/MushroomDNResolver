@@ -5,18 +5,19 @@ pub mod authority;
 pub mod error;
 pub mod store;
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use crate::authority::mushroom::Mushroom;
+use crate::authority::Catalog;
+use crate::server::ServerFuture;
 use anyhow::Error;
 use hickory_resolver::config::*;
 use hickory_resolver::TokioResolver;
 use sd_notify::NotifyState;
 use socket2::{Domain, Socket, Type};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::runtime;
 use tracing::{error, info};
-use crate::authority::Catalog;
-use crate::authority::mushroom::Mushroom;
-use crate::server::ServerFuture;
 
 
 /// Low-level types for DNSSEC operations
@@ -48,38 +49,8 @@ pub mod dnssec {
     }
 }
 
-//
-// /// 2 ms response time = 1% reliability
-// const RESP_TIME_ON_SUCCESS_RATE: f64 = 2.0/1.0;
-//
-// const SLIDING_WINDOW: u8 = 100; // Last X queries will count towards reliability
-// const ALPHA: f64 = 0.2; // percentage (0-1) of how much we want to forget the last result.
-//
-// struct WeightedResolver {
-//     last_reliability: f64,
-//     avg_response_time: f64,
-//     resolver: TokioResolver
-// }
-//
-// impl WeightedResolver {
-//     fn new(resolver: TokioResolver) -> WeightedResolver {
-//
-//     }
-//
-//     fn recompute_reliability(success: bool)  {
-//
-//     }
-//
-//     // smaller better
-//     fn heuristic() -> usize {
-//         let
-//     }
-// }
-
-
-fn main() -> Result<(), String>{
+fn main() -> Result<(), String> {
     // Construct a new Resolver with default configuration options
-    // let tokio_fallback_resolver = TokioResolver::tokio(ResolverConfig::google(), ResolverOpts::default());
     tracing_subscriber::fmt().init();
     let mut runtime = runtime::Builder::new_multi_thread();
     runtime.enable_all().thread_name("hickory-server-runtime");
@@ -89,13 +60,29 @@ fn main() -> Result<(), String>{
         .map_err(|err| format!("failed to initialize Tokio runtime: {err:?}"))?;
 
 
-    let resolver = TokioResolver::tokio(ResolverConfig::cloudflare_tls(), ResolverOpts::default());
+    let mut opts = ResolverOpts::default();
+    opts.cache_size = 256;
+    opts.timeout = Duration::from_secs(5);
+    opts.try_tcp_on_error = false;
+    opts.attempts = 1;
+    opts.server_ordering_strategy = ServerOrderingStrategy::QueryStatistics;
+    opts.num_concurrent_reqs = 2;
+    opts.use_hosts_file = ResolveHosts::Always;
+    let mut resolver_config = ResolverConfig::new();
+    let config_groups = [NameServerConfigGroup::cloudflare_tls(), NameServerConfigGroup::cloudflare_https(), NameServerConfigGroup::quad9_tls(), NameServerConfigGroup::quad9_https(), NameServerConfigGroup::google_h3()];
+    for config_group in config_groups {
+        for name_server_cfg in config_group.iter() {
+            resolver_config.add_name_server(name_server_cfg.clone());
+        }
+    }
+    println!("{:?}", resolver_config.name_servers());
+
+    let resolver = TokioResolver::tokio(resolver_config, opts);
     let mut binds = vec![];
     let _guard = runtime.enter();
     binds.push(build_udp_socket(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8853));
-    // binds.push(build_udp_socket(IpAddr::V6(Ipv6Addr::new()), 53));
+    binds.push(build_udp_socket(IpAddr::V6(Ipv6Addr::new(0,0,0,0,0,0,0,1)), 8853));
 
-    let mut catalog: Catalog = Catalog::new(); // Used for serving zone files
     let mushroom = Mushroom {
         resolver,
     };

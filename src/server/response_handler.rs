@@ -40,6 +40,7 @@ pub trait ResponseHandler: Clone + Send + Sync + Unpin + 'static {
             impl Iterator<Item = &'a Record> + Send + 'a,
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
+        millis: u128
     ) -> io::Result<ResponseInfo>;
 }
 
@@ -104,9 +105,10 @@ impl ResponseHandler for ResponseHandle {
             impl Iterator<Item = &'a Record> + Send + 'a,
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
+        millis: u128
     ) -> io::Result<ResponseInfo> {
         debug!(
-            "response: {} response_code: {}",
+            "response: {} millis:{millis} response_code: {}",
             response.header().id(),
             response.header().response_code(),
         );

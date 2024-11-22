@@ -26,6 +26,12 @@ use tracing::{debug, info, warn};
 #[cfg(all(feature = "dns-over-openssl", not(feature = "dns-over-rustls")))]
 use hickory_proto::openssl::tls_server::*;
 
+use crate::lookup::hickory_lookup;
+use crate::{
+    access::AccessControl,
+    authority::{MessageRequest, MessageResponseBuilder},
+    server::{Request, RequestHandler, ResponseHandle, ResponseHandler, TimeoutStream},
+};
 use hickory_proto::{
     op::{Header, LowerQuery, Query, ResponseCode},
     runtime::iocompat::AsyncIoTokioAsStd,
@@ -38,12 +44,6 @@ use hickory_proto::{
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioResolver;
 use tokio::io::AsyncReadExt;
-use crate::{
-    access::AccessControl,
-    authority::{MessageRequest, MessageResponseBuilder},
-    server::{Request, RequestHandler, ResponseHandle, ResponseHandler, TimeoutStream},
-};
-use crate::lookup::hickory_lookup;
 
 // TODO, would be nice to have a Slab for buffers here...
 /// A Futures based implementation of a DNS server
@@ -993,8 +993,9 @@ impl<R: ResponseHandler> ResponseHandler for ReportingResponseHandler<R> {
             impl Iterator<Item=&'a Record> + Send + 'a,
             impl Iterator<Item=&'a Record> + Send + 'a,
         >,
+        millis: u128
     ) -> io::Result<super::ResponseInfo> {
-        let response_info = self.handler.send_response(response).await?;
+        let response_info = self.handler.send_response(response, millis).await?;
 
         let id = self.request_header.id();
         let rid = response_info.id();
@@ -1009,8 +1010,9 @@ impl<R: ResponseHandler> ResponseHandler for ReportingResponseHandler<R> {
         let additional_count = response_info.additional_count();
         let response_code = response_info.response_code();
 
-        info!("request:{id} src:{proto}://{addr}#{port} {op}:{query}:{qtype}:{class} qflags:{qflags} response:{code:?} rr:{answers}/{authorities}/{additionals} rflags:{rflags}",
+        info!("request:{id} ms:{millis} src:{proto}://{addr}#{port} {op}:{query}:{qtype}:{class} qflags:{qflags} response:{code:?} rr:{answers}/{authorities}/{additionals} rflags:{rflags}",
             id = rid,
+            millis = millis,
             proto = self.protocol,
             addr = self.src_addr.ip(),
             port = self.src_addr.port(),
@@ -1085,9 +1087,6 @@ pub(crate) async fn handle_request<R: ResponseHandler, T: RequestHandler>(
             src_addr,
             handler: response_handler,
         };
-        let res = hickory_lookup(
-            &TokioResolver::tokio(ResolverConfig::cloudflare_tls(), ResolverOpts::default()), &query_name.to_string(), query_type
-        ).await;
         request_handler.handle_request(&request, reporter).await;
     };
 
@@ -1123,7 +1122,7 @@ pub(crate) async fn handle_request<R: ResponseHandler, T: RequestHandler>(
 
         let response = MessageResponseBuilder::new(None);
         let result = reporter
-            .send_response(response.error_msg(&header, response_code))
+            .send_response(response.error_msg(&header, response_code), 0)
             .await;
 
         if let Err(e) = result {
