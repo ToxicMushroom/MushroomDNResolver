@@ -43,6 +43,7 @@ use hickory_proto::{
 };
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioResolver;
+use sd_notify::NotifyState;
 
 // TODO, would be nice to have a Slab for buffers here...
 /// A Futures based implementation of a DNS server
@@ -57,6 +58,16 @@ impl<T: RequestHandler> ServerFuture<T> {
     /// Creates a new ServerFuture with the specified Handler.
     pub fn new(handler: T) -> Self {
         Self::with_access(handler, &[], &[])
+    }
+
+    pub fn register_watchdog_feeder(&mut self) {
+        self.join_set.spawn(async {
+            loop {
+                sd_notify::notify(true, &[NotifyState::Watchdog]).unwrap();
+                info!("Pet watchdog");
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        });
     }
 
     /// Creates a new ServerFuture with the specified Handler and Access
@@ -232,7 +243,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                             handler.clone(),
                             stream_handle.clone(),
                         )
-                        .await;
+                            .await;
                     }
                 });
 
@@ -384,7 +395,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                             handler.clone(),
                             stream_handle.clone(),
                         )
-                        .await;
+                            .await;
                     }
                 });
 
@@ -532,7 +543,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                             handler.clone(),
                             stream_handle.clone(),
                         )
-                        .await;
+                            .await;
                     }
                 });
 
@@ -573,11 +584,11 @@ impl<T: RequestHandler> ServerFuture<T> {
 
         let tls_acceptor = tls_server::new_acceptor(certificate_and_key.0, certificate_and_key.1)
             .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("error creating TLS acceptor: {e}"),
-            )
-        })?;
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("error creating TLS acceptor: {e}"),
+                )
+            })?;
 
         Self::register_tls_listener_with_tls_config(self, listener, timeout, Arc::new(tls_acceptor))
     }
@@ -619,11 +630,11 @@ impl<T: RequestHandler> ServerFuture<T> {
 
         let tls_acceptor = tls_server::new_acceptor(certificate_and_key.0, certificate_and_key.1)
             .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("error creating TLS acceptor: {e}"),
-            )
-        })?;
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("error creating TLS acceptor: {e}"),
+                )
+            })?;
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_acceptor));
 
         // for each incoming request...
@@ -686,7 +697,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                         http_endpoint,
                         shutdown.clone(),
                     )
-                    .await;
+                        .await;
                 });
 
                 reap_tasks(&mut inner_join_set);
@@ -784,7 +795,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                         dns_hostname,
                         shutdown.clone(),
                     )
-                    .await;
+                        .await;
 
                     if let Err(e) = result {
                         warn!("quic stream processing failed from {src_addr}: {e}")
@@ -882,7 +893,7 @@ impl<T: RequestHandler> ServerFuture<T> {
                         dns_hostname,
                         shutdown.clone(),
                     )
-                    .await;
+                        .await;
 
                     if let Err(e) = result {
                         warn!("h3 stream processing failed from {src_addr}: {e}")
@@ -967,7 +978,7 @@ pub(crate) async fn handle_raw_request<T: RequestHandler>(
         request_handler,
         response_handler,
     )
-    .await;
+        .await;
 }
 
 #[derive(Clone)]
@@ -987,10 +998,10 @@ impl<R: ResponseHandler> ResponseHandler for ReportingResponseHandler<R> {
         response: crate::authority::MessageResponse<
             '_,
             'a,
-            impl Iterator<Item = &'a Record> + Send + 'a,
-            impl Iterator<Item = &'a Record> + Send + 'a,
-            impl Iterator<Item = &'a Record> + Send + 'a,
-            impl Iterator<Item = &'a Record> + Send + 'a,
+            impl Iterator<Item=&'a Record> + Send + 'a,
+            impl Iterator<Item=&'a Record> + Send + 'a,
+            impl Iterator<Item=&'a Record> + Send + 'a,
+            impl Iterator<Item=&'a Record> + Send + 'a,
         >,
         millis: u128,
     ) -> io::Result<super::ResponseInfo> {
@@ -1160,7 +1171,7 @@ pub(crate) async fn handle_request<R: ResponseHandler, T: RequestHandler>(
                 error,
                 response_handler,
             )
-            .await;
+                .await;
         }
         Err(error) => info!(
             "request:Failed src:{proto}://{addr}#{port} error:{error}",
@@ -1430,13 +1441,13 @@ mod tests {
             "{}/tests/test-data/cert.pem",
             server_path
         )))
-        .map_err(|e| format!("error reading cert: {e}"))
-        .unwrap();
+            .map_err(|e| format!("error reading cert: {e}"))
+            .unwrap();
         let key = tls_server::read_key(Path::new(&format!(
             "{}/tests/test-data/cert.key",
             server_path
         )))
-        .unwrap();
+            .unwrap();
 
         (cert, key)
     }

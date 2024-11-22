@@ -97,7 +97,10 @@ fn main() -> Result<(), String> {
 
     for bind in binds {
         match bind {
-            Ok(bind) => server.register_socket(bind),
+            Ok(bind) => {
+                info!("Bound {:?}", bind.local_addr().unwrap());
+                server.register_socket(bind);
+            },
             Err(err) => {
                 error!("{}", err);
             }
@@ -108,12 +111,7 @@ fn main() -> Result<(), String> {
     if sd_notify::booted().unwrap_or(false) {
         sd_notify::notify(true, &[NotifyState::Ready]).unwrap();
     }
-    runtime.spawn(async {
-        loop {
-            sd_notify::notify(true, &[NotifyState::Watchdog]).unwrap();
-            tokio::time::sleep(Duration::from_secs(60)).await;
-        }
-    });
+    &server.register_watchdog_feeder();
     match runtime.block_on(server.block_until_done()) {
         Ok(()) => {
             // we're exiting for some reason...
