@@ -56,6 +56,18 @@ fn main() -> Result<(), String> {
         .build()
         .map_err(|err| format!("failed to initialize Tokio runtime: {err:?}"))?;
 
+    let mut binds = vec![];
+    let _guard = runtime.enter();
+    binds.push(build_udp_socket(
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        53,
+    ));
+    let ipv6_sock = build_udp_socket(
+        IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+        53,
+    );
+    binds.push(ipv6_sock);
+
     let mut opts = ResolverOpts::default();
     opts.cache_size = 256;
     opts.timeout = Duration::from_secs(5);
@@ -65,6 +77,7 @@ fn main() -> Result<(), String> {
     opts.num_concurrent_reqs = 2;
     opts.use_hosts_file = ResolveHosts::Always;
     let mut resolver_config = ResolverConfig::new();
+    let mut ipv4_resolver_config = ResolverConfig::new();
     let config_groups = [
         NameServerConfigGroup::cloudflare_tls(),
         NameServerConfigGroup::cloudflare_https(),
@@ -74,23 +87,17 @@ fn main() -> Result<(), String> {
     ];
     for config_group in config_groups {
         for name_server_cfg in config_group.iter() {
+            if name_server_cfg.socket_addr.is_ipv4() {
+                ipv4_resolver_config.add_name_server(name_server_cfg.clone());
+                continue
+            }
             resolver_config.add_name_server(name_server_cfg.clone());
         }
     }
 
-    let resolver = TokioResolver::tokio(resolver_config, opts);
-    let mut binds = vec![];
-    let _guard = runtime.enter();
-    binds.push(build_udp_socket(
-        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-        53,
-    ));
-    binds.push(build_udp_socket(
-        IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
-        53,
-    ));
-
-    let mushroom = Mushroom { resolver };
+    let resolver = TokioResolver::tokio(resolver_config, opts.clone());
+    let ipv4_resolver = TokioResolver::tokio(ipv4_resolver_config, opts);
+    let mushroom = Mushroom { resolver, ipv4_resolver };
     let deny_networks = &[];
     let allow_networks = &[];
     let mut server = ServerFuture::with_access(mushroom, deny_networks, allow_networks);

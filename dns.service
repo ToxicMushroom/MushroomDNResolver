@@ -35,7 +35,7 @@ RuntimeDirectoryPreserve=yes
 Type=notify
 ImportCredential=network.dns
 ImportCredential=network.search_domains
-WatchdogSec=3min
+WatchdogSec=60min
 
 [Install]
 WantedBy=sysinit.target

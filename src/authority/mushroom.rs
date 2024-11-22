@@ -7,6 +7,7 @@ use std::time::Instant;
 
 pub struct Mushroom {
     pub resolver: TokioResolver,
+    pub ipv4_resolver: TokioResolver,
 }
 
 #[async_trait::async_trait]
@@ -18,7 +19,7 @@ impl RequestHandler for Mushroom {
     ) -> ResponseInfo {
         let x = request.request_info().query;
         let now = Instant::now();
-        let result = hickory_lookup(&self.resolver, &x.name().to_string(), x.query_type()).await;
+        let result = hickory_lookup(self, &x.name().to_string(), x.query_type()).await;
         let lookup_time = now.elapsed().as_millis();
 
         let mb = MessageResponseBuilder::new(Some(request.raw_query()));

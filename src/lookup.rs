@@ -1,3 +1,4 @@
+use crate::authority::mushroom::Mushroom;
 use dbus::arg::{RefArg, Variant};
 use dbus::blocking::Connection;
 use hickory_resolver::config::{
@@ -10,25 +11,31 @@ use hickory_resolver::{ResolveError, TokioResolver};
 use networkmanager::devices::{Any, Device, Wired};
 use networkmanager::NetworkManager;
 use std::collections::HashMap;
+use std::fs::read_to_string;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::str::FromStr;
+use sysctl::{CtlValue, Sysctl};
 use tracing::{error, info, warn};
 
 pub(crate) async fn hickory_lookup(
-    resolver: &TokioResolver,
+    mushroom: &Mushroom,
     x0: &String,
     record_type: RecordType,
 ) -> Result<Lookup, ResolveError> {
     let mut resolver_opts = ResolverOpts::default();
     resolver_opts.try_tcp_on_error = false;
 
+    let ipv6_support = is_ipv6_enabled();
+
     let final_resolver = if x0.ends_with("nordvpn.com.") {
         let mut resolver_config = ResolverConfig::new();
-        try_adding_ns_from_dhcp(&mut resolver_config);
+        try_adding_ns_from_dhcp(&mut resolver_config, ipv6_support);
 
         if resolver_config.name_servers().is_empty() {
             for ns in NameServerConfigGroup::google().iter() {
-                resolver_config.add_name_server(ns.clone())
+                if ipv6_support || ns.socket_addr.is_ipv4() {
+                    resolver_config.add_name_server(ns.clone())
+                }
             }
         }
 
@@ -39,12 +46,28 @@ pub(crate) async fn hickory_lookup(
         );
         &TokioResolver::tokio(resolver_config, resolver_opts)
     } else {
-        resolver
+        if ipv6_support {
+            &mushroom.resolver
+        } else {
+            &mushroom.ipv4_resolver
+        }
     };
     final_resolver.lookup(x0, record_type).await
 }
 
-fn try_adding_ns_from_dhcp(resolver_config: &mut ResolverConfig) {
+fn is_ipv6_enabled() -> bool {
+    let disabled: CtlValue = sysctl::Ctl::new("net.ipv6.conf.all.disable_ipv6")
+        .map(|v|
+            {
+                let err = v.value();
+                err.unwrap_or(CtlValue::String("1".to_string()))
+            }
+        )
+        .unwrap_or(CtlValue::String("1".to_string()));
+    disabled == CtlValue::String("0".to_string())
+}
+
+fn try_adding_ns_from_dhcp(resolver_config: &mut ResolverConfig, ipv6_support: bool) {
     let dbus_connection = Connection::new_system();
 
     if let Ok(dbus_connection) = dbus_connection {
@@ -56,15 +79,19 @@ fn try_adding_ns_from_dhcp(resolver_config: &mut ResolverConfig) {
                     let dhcp4_map = x.dhcp4_config().unwrap().options().unwrap();
                     try_adding_dhcp4_ns(resolver_config, dhcp4_map);
 
-                    let dhcp6_map = x.dhcp6_config().unwrap().options().unwrap();
-                    try_adding_dhcp6_ns(resolver_config, &dhcp6_map);
+                    if ipv6_support {
+                        let dhcp6_map = x.dhcp6_config().unwrap().options().unwrap();
+                        try_adding_dhcp6_ns(resolver_config, &dhcp6_map);
+                    }
                 }
                 Device::WiFi(x) => {
                     let dhcp4_map = x.dhcp4_config().unwrap().options().unwrap();
                     try_adding_dhcp4_ns(resolver_config, dhcp4_map);
 
-                    let dhcp6_map = x.dhcp6_config().unwrap().options().unwrap();
-                    try_adding_dhcp6_ns(resolver_config, &dhcp6_map);
+                    if ipv6_support {
+                        let dhcp6_map = x.dhcp6_config().unwrap().options().unwrap();
+                        try_adding_dhcp6_ns(resolver_config, &dhcp6_map);
+                    }
                 }
                 _ => {}
             }
