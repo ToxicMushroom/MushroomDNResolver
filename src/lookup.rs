@@ -1,6 +1,8 @@
 use dbus::arg::{RefArg, Variant};
 use dbus::blocking::Connection;
-use hickory_resolver::config::{NameServerConfig, NameServerConfigGroup, ResolverConfig, ResolverOpts};
+use hickory_resolver::config::{
+    NameServerConfig, NameServerConfigGroup, ResolverConfig, ResolverOpts,
+};
 use hickory_resolver::lookup::Lookup;
 use hickory_resolver::proto::rr::RecordType;
 use hickory_resolver::proto::xfer::Protocol;
@@ -12,7 +14,11 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::str::FromStr;
 use tracing::{error, info, warn};
 
-pub(crate) async fn hickory_lookup(resolver: &TokioResolver, x0: &String, record_type: RecordType) -> Result<Lookup, ResolveError> {
+pub(crate) async fn hickory_lookup(
+    resolver: &TokioResolver,
+    x0: &String,
+    record_type: RecordType,
+) -> Result<Lookup, ResolveError> {
     let mut resolver_opts = ResolverOpts::default();
     resolver_opts.try_tcp_on_error = false;
 
@@ -26,7 +32,11 @@ pub(crate) async fn hickory_lookup(resolver: &TokioResolver, x0: &String, record
             }
         }
 
-        info!("Forwarding {} lookup via {:?}", x0, resolver_config.name_servers());
+        info!(
+            "Forwarding {} lookup via {:?}",
+            x0,
+            resolver_config.name_servers()
+        );
         &TokioResolver::tokio(resolver_config, resolver_opts)
     } else {
         resolver
@@ -62,24 +72,36 @@ fn try_adding_ns_from_dhcp(resolver_config: &mut ResolverConfig) {
     }
 }
 
-fn try_adding_dhcp6_ns(resolver_config: &mut ResolverConfig, dhcp6_map: &HashMap<String, Variant<Box<dyn RefArg>>>) {
+fn try_adding_dhcp6_ns(
+    resolver_config: &mut ResolverConfig,
+    dhcp6_map: &HashMap<String, Variant<Box<dyn RefArg>>>,
+) {
     let ipv6_ns_opt = dhcp6_map.get("dhcp6_name_servers");
     if let Some(variant) = ipv6_ns_opt {
         let ipv6_ns = Ipv6Addr::from_str(variant.as_str().unwrap());
         if let Ok(ipv6_ns) = ipv6_ns {
-            resolver_config.add_name_server(NameServerConfig::new(SocketAddr::V6(SocketAddrV6::new(ipv6_ns, 53, 0, 0)), Protocol::Udp))
+            resolver_config.add_name_server(NameServerConfig::new(
+                SocketAddr::V6(SocketAddrV6::new(ipv6_ns, 53, 0, 0)),
+                Protocol::Udp,
+            ))
         } else {
             warn!("Your dhcp server is cooked and supplied a garbage ipv6 address");
         }
     }
 }
 
-fn try_adding_dhcp4_ns(resolver_config: &mut ResolverConfig, dhcp4_map: HashMap<String, Variant<Box<dyn RefArg>>>) {
+fn try_adding_dhcp4_ns(
+    resolver_config: &mut ResolverConfig,
+    dhcp4_map: HashMap<String, Variant<Box<dyn RefArg>>>,
+) {
     let ipv4_ns_opt = dhcp4_map.get("domain_name_servers");
     if let Some(variant) = ipv4_ns_opt {
         let ipv4_ns = Ipv4Addr::from_str(variant.as_str().unwrap());
         if let Ok(ipv4_ns) = ipv4_ns {
-            resolver_config.add_name_server(NameServerConfig::new(SocketAddr::V4(SocketAddrV4::new(ipv4_ns, 53)), Protocol::Udp))
+            resolver_config.add_name_server(NameServerConfig::new(
+                SocketAddr::V4(SocketAddrV4::new(ipv4_ns, 53)),
+                Protocol::Udp,
+            ))
         } else {
             warn!("Your dhcp server is cooked and supplied a garbage ipv4 address");
         }

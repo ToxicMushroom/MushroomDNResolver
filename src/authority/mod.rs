@@ -7,7 +7,6 @@
 
 //! Module for `Catalog` of `Authority` zones which are responsible for storing `RRSet` records.
 
-
 /// Result of an Update operation
 pub type UpdateResult<T> = Result<T, ResponseCode>;
 
@@ -19,12 +18,11 @@ mod catalog;
 mod error;
 pub(crate) mod message_request;
 mod message_response;
-mod zone_type;
 pub mod mushroom;
+mod zone_type;
 
-use hickory_proto::op::ResponseCode;
 pub use self::auth_lookup::{
-    AnyRecords, AuthLookup, AuthLookupIter, LookupRecords, LookupRecordsIter,
+    AnyRecords, AuthLookup, LookupRecords,
 };
 pub use self::authority::{Authority, LookupControlFlow, LookupOptions};
 pub use self::authority_object::{AuthorityObject, DnssecSummary, EmptyLookup, LookupObject};
@@ -33,6 +31,7 @@ pub use self::error::LookupError;
 pub use self::message_request::{MessageRequest, Queries, UpdateRequest};
 pub use self::message_response::{MessageResponse, MessageResponseBuilder};
 pub use self::zone_type::ZoneType;
+use hickory_proto::op::ResponseCode;
 
 #[cfg(feature = "dnssec")]
 pub use self::authority::{DnssecAuthority, Nsec3QueryInfo};

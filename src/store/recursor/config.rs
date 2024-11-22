@@ -22,13 +22,13 @@ use serde::Deserialize;
 use hickory_resolver::dns_lru::TtlConfig;
 
 use crate::error::ConfigError;
+use crate::resolver::Name;
+#[cfg(feature = "dnssec")]
+use crate::{proto::rr::dnssec::TrustAnchor, recursor::DnssecPolicy};
 use hickory_proto::{
     rr::{RData, Record, RecordSet},
     serialize::txt::Parser,
 };
-use crate::resolver::Name;
-#[cfg(feature = "dnssec")]
-use crate::{proto::rr::dnssec::TrustAnchor, recursor::DnssecPolicy};
 
 /// Configuration for file based zones
 #[derive(Clone, Deserialize, Eq, PartialEq, Debug)]
@@ -178,8 +178,6 @@ fn parse_trust_anchor(input: &str) -> Result<TrustAnchor, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[cfg(feature = "dnssec")]
     #[test]
     fn can_load_trust_anchor_file() {

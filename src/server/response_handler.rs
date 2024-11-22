@@ -10,10 +10,7 @@ use std::{io, net::SocketAddr};
 use hickory_proto::rr::Record;
 use tracing::{debug, trace};
 
-use crate::{
-    authority::MessageResponse,
-    server::ResponseInfo,
-};
+use crate::{authority::MessageResponse, server::ResponseInfo};
 
 use hickory_proto::{
     serialize::binary::BinEncoder,
@@ -40,7 +37,7 @@ pub trait ResponseHandler: Clone + Send + Sync + Unpin + 'static {
             impl Iterator<Item = &'a Record> + Send + 'a,
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
-        millis: u128
+        millis: u128,
     ) -> io::Result<ResponseInfo>;
 }
 
@@ -105,7 +102,7 @@ impl ResponseHandler for ResponseHandle {
             impl Iterator<Item = &'a Record> + Send + 'a,
             impl Iterator<Item = &'a Record> + Send + 'a,
         >,
-        millis: u128
+        millis: u128,
     ) -> io::Result<ResponseInfo> {
         debug!(
             "response: {} millis:{millis} response_code: {}",

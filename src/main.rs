@@ -1,14 +1,12 @@
-pub mod lookup;
-pub mod server;
 pub mod access;
 pub mod authority;
 pub mod error;
+pub mod lookup;
+pub mod server;
 pub mod store;
 
 use crate::authority::mushroom::Mushroom;
-use crate::authority::Catalog;
 use crate::server::ServerFuture;
-use anyhow::Error;
 use hickory_resolver::config::*;
 use hickory_resolver::TokioResolver;
 use sd_notify::NotifyState;
@@ -18,7 +16,6 @@ use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::runtime;
 use tracing::{error, info};
-
 
 /// Low-level types for DNSSEC operations
 #[cfg(feature = "dnssec")]
@@ -59,7 +56,6 @@ fn main() -> Result<(), String> {
         .build()
         .map_err(|err| format!("failed to initialize Tokio runtime: {err:?}"))?;
 
-
     let mut opts = ResolverOpts::default();
     opts.cache_size = 256;
     opts.timeout = Duration::from_secs(5);
@@ -69,32 +65,39 @@ fn main() -> Result<(), String> {
     opts.num_concurrent_reqs = 2;
     opts.use_hosts_file = ResolveHosts::Always;
     let mut resolver_config = ResolverConfig::new();
-    let config_groups = [NameServerConfigGroup::cloudflare_tls(), NameServerConfigGroup::cloudflare_https(), NameServerConfigGroup::quad9_tls(), NameServerConfigGroup::quad9_https(), NameServerConfigGroup::google_h3()];
+    let config_groups = [
+        NameServerConfigGroup::cloudflare_tls(),
+        NameServerConfigGroup::cloudflare_https(),
+        NameServerConfigGroup::quad9_tls(),
+        NameServerConfigGroup::quad9_https(),
+        NameServerConfigGroup::google_h3(),
+    ];
     for config_group in config_groups {
         for name_server_cfg in config_group.iter() {
             resolver_config.add_name_server(name_server_cfg.clone());
         }
     }
-    println!("{:?}", resolver_config.name_servers());
 
     let resolver = TokioResolver::tokio(resolver_config, opts);
     let mut binds = vec![];
     let _guard = runtime.enter();
-    binds.push(build_udp_socket(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8853));
-    binds.push(build_udp_socket(IpAddr::V6(Ipv6Addr::new(0,0,0,0,0,0,0,1)), 8853));
+    binds.push(build_udp_socket(
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        53,
+    ));
+    binds.push(build_udp_socket(
+        IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+        53,
+    ));
 
-    let mushroom = Mushroom {
-        resolver,
-    };
+    let mushroom = Mushroom { resolver };
     let deny_networks = &[];
     let allow_networks = &[];
     let mut server = ServerFuture::with_access(mushroom, deny_networks, allow_networks);
 
     for bind in binds {
         match bind {
-            Ok(bind) => {
-                server.register_socket(bind)
-            }
+            Ok(bind) => server.register_socket(bind),
             Err(err) => {
                 error!("{}", err);
             }
@@ -102,7 +105,7 @@ fn main() -> Result<(), String> {
     }
 
     info!("server starting up, awaiting connections...");
-    if (sd_notify::booted().unwrap_or(false)) {
+    if sd_notify::booted().unwrap_or(false) {
         sd_notify::notify(true, &[NotifyState::Ready]).unwrap();
     }
     match runtime.block_on(server.block_until_done()) {
@@ -113,8 +116,7 @@ fn main() -> Result<(), String> {
         Err(e) => {
             let error_msg = format!(
                 "Hickory MushroomDNResolver {} has encountered an error: {}",
-                "5",
-                e
+                "5", e
             );
 
             error!("{}", error_msg);
@@ -142,4 +144,3 @@ fn build_udp_socket(ip: IpAddr, port: u16) -> Result<UdpSocket, std::io::Error> 
 
     UdpSocket::from_std(sock.into())
 }
-

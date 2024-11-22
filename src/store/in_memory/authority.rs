@@ -42,7 +42,6 @@ use crate::{
         AnyRecords, AuthLookup, Authority, LookupControlFlow, LookupError, LookupOptions,
         LookupRecords, MessageRequest, UpdateResult, ZoneType,
     },
-
     server::RequestInfo,
 };
 use hickory_proto::{

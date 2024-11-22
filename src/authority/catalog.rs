@@ -144,7 +144,10 @@ impl RequestHandler for Catalog {
                     let response = MessageResponseBuilder::new(Some(request.raw_query()));
 
                     response_handle
-                        .send_response(response.error_msg(request.header(), ResponseCode::NotImp), 0)
+                        .send_response(
+                            response.error_msg(request.header(), ResponseCode::NotImp),
+                            0,
+                        )
                         .await
                 }
             },
@@ -153,7 +156,10 @@ impl RequestHandler for Catalog {
                 let response = MessageResponseBuilder::new(Some(request.raw_query()));
 
                 response_handle
-                    .send_response(response.error_msg(request.header(), ResponseCode::FormErr), 0)
+                    .send_response(
+                        response.error_msg(request.header(), ResponseCode::FormErr),
+                        0,
+                    )
                     .await
             }
         };

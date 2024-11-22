@@ -24,14 +24,14 @@ use crate::{
     store::{file::FileConfig, in_memory::InMemoryAuthority},
 };
 
-use hickory_proto::rr::{LowerName, Name, RecordSet, RecordType, RrKey};
-use hickory_proto::serialize::txt::Parser;
 #[cfg(feature = "dnssec")]
 use crate::{
     authority::{DnssecAuthority, Nsec3QueryInfo},
     dnssec::NxProofKind,
     hickory_proto::rr::dnssec::{rdata::key::KEY, DnsSecResult, SigSigner},
 };
+use hickory_proto::rr::{LowerName, Name, RecordSet, RecordType, RrKey};
+use hickory_proto::serialize::txt::Parser;
 
 /// FileAuthority is responsible for storing the resource records for a particular zone.
 ///
@@ -70,7 +70,7 @@ impl FileAuthority {
             #[cfg(feature = "dnssec")]
             nx_proof_kind,
         )
-            .map(Self)
+        .map(Self)
     }
 
     /// Read the Authority for the origin from the specified configuration
@@ -271,8 +271,8 @@ impl DnssecAuthority for FileAuthority {
 mod tests {
     use std::str::FromStr;
 
-    use hickory_proto::rr::{rdata::A, RData};
     use futures_executor::block_on;
+    use hickory_proto::rr::{rdata::A, RData};
 
     use super::*;
     use crate::authority::ZoneType;
@@ -297,7 +297,7 @@ mod tests {
             #[cfg(feature = "dnssec")]
             Some(NxProofKind::Nsec),
         )
-            .expect("failed to load file");
+        .expect("failed to load file");
 
         let lookup = block_on(Authority::lookup(
             &authority,
@@ -305,7 +305,7 @@ mod tests {
             RecordType::A,
             LookupOptions::default(),
         ))
-            .expect("lookup failed");
+        .expect("lookup failed");
 
         match lookup
             .into_iter()
@@ -323,7 +323,7 @@ mod tests {
             RecordType::A,
             LookupOptions::default(),
         ))
-            .expect("INCLUDE lookup failed");
+        .expect("INCLUDE lookup failed");
 
         match include_lookup
             .into_iter()

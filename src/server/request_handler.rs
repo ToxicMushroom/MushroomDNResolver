@@ -7,16 +7,12 @@
 
 //! Request Handler for incoming requests
 
-use std::net::SocketAddr;
+use crate::{authority::MessageRequest, server::ResponseHandler};
 use hickory_proto::{
     op::{Header, LowerQuery, ResponseCode},
     xfer::Protocol,
 };
-use crate::{
-    authority::MessageRequest,
-
-    server::ResponseHandler,
-};
+use std::net::SocketAddr;
 
 /// An incoming request to the DNS catalog
 #[derive(Debug)]

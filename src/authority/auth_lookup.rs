@@ -5,12 +5,12 @@
 // https://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
+#[cfg(feature = "dnssec")]
+use crate::{authority::DnssecSummary, hickory_proto::rr::dnssec::Proof};
+use cfg_if::cfg_if;
 use std::iter::Chain;
 use std::slice::Iter;
 use std::sync::Arc;
-use cfg_if::cfg_if;
-#[cfg(feature = "dnssec")]
-use crate::{authority::DnssecSummary, hickory_proto::rr::dnssec::Proof};
 
 use crate::authority::{LookupObject, LookupOptions};
 use hickory_proto::rr::{LowerName, Record, RecordSet, RecordType, RrsetRecords};

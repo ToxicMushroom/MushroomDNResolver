@@ -5,12 +5,12 @@
 // https://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
+use super::message_request::WireQuery;
 use crate::{
     authority::{
         message_request::{MessageRequest, QueriesEmitAndCount},
         Queries,
     },
-
     server::ResponseInfo,
 };
 use hickory_proto::{
@@ -22,7 +22,6 @@ use hickory_proto::{
     serialize::binary::BinEncoder,
     ProtoError,
 };
-use super::message_request::WireQuery;
 
 /// A EncodableMessage with borrowed data for Responses in the Server
 #[derive(Debug)]

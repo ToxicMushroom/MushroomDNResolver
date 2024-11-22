@@ -10,9 +10,6 @@
 use cfg_if::cfg_if;
 use std::fmt;
 
-#[cfg(feature = "dnssec")]
-use hickory_proto::ProtoError;
-use hickory_proto::rr::{LowerName, RecordSet, RecordType, RrsetRecords};
 use crate::{
     authority::{LookupError, LookupObject, MessageRequest, UpdateResult, ZoneType},
     server::RequestInfo,
@@ -28,6 +25,9 @@ use crate::{
         Name,
     },
 };
+use hickory_proto::rr::{LowerName, RecordSet, RecordType, RrsetRecords};
+#[cfg(feature = "dnssec")]
+use hickory_proto::ProtoError;
 
 /// LookupOptions that specify different options from the client to include or exclude various records in the response.
 ///

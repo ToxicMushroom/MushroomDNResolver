@@ -11,7 +11,11 @@ pub struct Mushroom {
 
 #[async_trait::async_trait]
 impl RequestHandler for Mushroom {
-    async fn handle_request<R: ResponseHandler>(&self, request: &Request, mut response_handle: R) -> ResponseInfo {
+    async fn handle_request<R: ResponseHandler>(
+        &self,
+        request: &Request,
+        mut response_handle: R,
+    ) -> ResponseInfo {
         let x = request.request_info().query;
         let now = Instant::now();
         let result = hickory_lookup(&self.resolver, &x.name().to_string(), x.query_type()).await;
@@ -23,22 +27,33 @@ impl RequestHandler for Mushroom {
             Ok(result) => {
                 let message_response = mb.build(
                     Header::response_from_request(request.header()),
-                    result.record_iter().filter(|x1| !(x1.record_type().is_soa() || x1.record_type().is_ns())),
+                    result
+                        .record_iter()
+                        .filter(|x1| !(x1.record_type().is_soa() || x1.record_type().is_ns())),
                     result.record_iter().filter(|x1| x1.record_type().is_ns()),
                     result.record_iter().filter(|x1| x1.record_type().is_soa()),
-                    vec![].into_iter());
-                response_handle.send_response(message_response, lookup_time).await
+                    vec![].into_iter(),
+                );
+                response_handle
+                    .send_response(message_response, lookup_time)
+                    .await
                     .expect("being able to send a dns response")
             }
             Err(err) => {
                 if err.is_no_records_found() {
-                    let message_response = mb.build_no_records(Header::response_from_request(request.header()));
-                    response_handle.send_response(message_response, lookup_time).await
+                    let message_response =
+                        mb.build_no_records(Header::response_from_request(request.header()));
+                    response_handle
+                        .send_response(message_response, lookup_time)
+                        .await
                         .expect("being able to send a dns response")
                 } else {
                     // TODO: Return proper error lol
-                    let message_response = mb.build_no_records(Header::response_from_request(request.header()));
-                    response_handle.send_response(message_response, lookup_time).await
+                    let message_response =
+                        mb.build_no_records(Header::response_from_request(request.header()));
+                    response_handle
+                        .send_response(message_response, lookup_time)
+                        .await
                         .expect("being able to send a dns response")
                 }
             }
@@ -47,4 +62,3 @@ impl RequestHandler for Mushroom {
         response_info
     }
 }
-

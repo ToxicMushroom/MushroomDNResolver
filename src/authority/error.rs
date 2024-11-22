@@ -10,13 +10,13 @@ use std::{io, sync::Arc};
 use enum_as_inner::EnumAsInner;
 use thiserror::Error;
 
-use hickory_proto::op::ResponseCode;
-use hickory_proto::rr::{rdata::SOA, Record};
-use hickory_proto::{ProtoError, ProtoErrorKind};
 #[cfg(feature = "hickory-recursor")]
 use crate::recursor::ErrorKind;
 #[cfg(feature = "hickory-resolver")]
 use crate::resolver::ResolveError;
+use hickory_proto::op::ResponseCode;
+use hickory_proto::rr::{rdata::SOA, Record};
+use hickory_proto::{ProtoError, ProtoErrorKind};
 
 // TODO: should this implement Failure?
 #[allow(clippy::large_enum_variant)]
