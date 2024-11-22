@@ -108,6 +108,12 @@ fn main() -> Result<(), String> {
     if sd_notify::booted().unwrap_or(false) {
         sd_notify::notify(true, &[NotifyState::Ready]).unwrap();
     }
+    runtime.spawn(async {
+        loop {
+            sd_notify::notify(true, &[NotifyState::Watchdog]).unwrap();
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
     match runtime.block_on(server.block_until_done()) {
         Ok(()) => {
             // we're exiting for some reason...
