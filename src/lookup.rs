@@ -104,17 +104,22 @@ fn try_adding_dhcp6_ns(
     dhcp6_map: Result<Result<HashMap<String, Variant<Box<dyn RefArg>>>, Error>, Error>,
 ) {
     if let Ok(Ok(dhcp6_map)) = dhcp6_map {
-        let ipv6_ns_opt = dhcp6_map.get("dhcp6_name_servers");
-        if let Some(variant) = ipv6_ns_opt {
-            let ipv6_ns = Ipv6Addr::from_str(variant.as_str().unwrap());
-            if let Ok(ipv6_ns) = ipv6_ns {
+        let ipv6_ns_opt = dhcp6_map.get("dhcp6_name_servers").map(|it| it.as_str());
+        if let Some(Some(dhcp_ipv6s)) = ipv6_ns_opt {
+            dhcp_ipv6s.split(" ")
+                .filter_map(|ipv6_str| {
+                    if let Ok(ipv6_ns) = Ipv6Addr::from_str(ipv6_str) {
+                        Some(ipv6_ns)
+                    } else {
+                        warn!("Your dhcp server is cooked and supplied a garbage ipv6 address {ipv6_str}");
+                        None
+                    }
+                }).for_each(|ipv6_ns| {
                 resolver_config.add_name_server(NameServerConfig::new(
                     SocketAddr::V6(SocketAddrV6::new(ipv6_ns, 53, 0, 0)),
                     Protocol::Udp,
                 ))
-            } else {
-                warn!("Your dhcp server is cooked and supplied a garbage ipv6 address");
-            }
+            });
         }
     }
 }
@@ -124,17 +129,22 @@ fn try_adding_dhcp4_ns(
     dhcp4_map: Result<Result<HashMap<String, Variant<Box<dyn RefArg>>>, Error>, Error>,
 ) {
     if let Ok(Ok(dhcp4_map)) = dhcp4_map {
-        let ipv4_ns_opt = dhcp4_map.get("domain_name_servers");
-        if let Some(variant) = ipv4_ns_opt {
-            let ipv4_ns = Ipv4Addr::from_str(variant.as_str().unwrap());
-            if let Ok(ipv4_ns) = ipv4_ns {
+        let ipv4_ns_opt = dhcp4_map.get("domain_name_servers").map(|it| it.as_str());
+        if let Some(Some(dhcp_ipv4s)) = ipv4_ns_opt {
+            dhcp_ipv4s.split(" ")
+                .filter_map(|ipv4_str| {
+                    if let Ok(ipv4_ns) = Ipv4Addr::from_str(ipv4_str) {
+                        Some(ipv4_ns)
+                    } else {
+                        warn!("Your dhcp server is cooked and supplied a garbage ipv4 address {ipv4_str}");
+                        None
+                    }
+                }).for_each(|ipv4_ns| {
                 resolver_config.add_name_server(NameServerConfig::new(
                     SocketAddr::V4(SocketAddrV4::new(ipv4_ns, 53)),
                     Protocol::Udp,
                 ))
-            } else {
-                warn!("Your dhcp server is cooked and supplied a garbage ipv4 address");
-            }
+            });
         }
     }
 }
