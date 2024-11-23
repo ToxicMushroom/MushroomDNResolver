@@ -50,7 +50,7 @@ pub mod dnssec {
 
 fn main() -> Result<(), String> {
     // Construct a new Resolver with default configuration options
-    let in_systemd = option_env!("IN_SYSTEMD").unwrap_or("0") == "1";
+    let in_systemd = option_env!("LAUNCHED_BY_SYSTEMD").unwrap_or("0") == "1";
     setup_logging(in_systemd);
 
     let mut runtime = runtime::Builder::new_multi_thread();
