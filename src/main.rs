@@ -16,6 +16,8 @@ use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::runtime;
 use tracing::{error, info};
+use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::FormatEvent;
 
 /// Low-level types for DNSSEC operations
 #[cfg(feature = "dnssec")]
@@ -48,7 +50,9 @@ pub mod dnssec {
 
 fn main() -> Result<(), String> {
     // Construct a new Resolver with default configuration options
-    tracing_subscriber::fmt().init();
+    let in_systemd = true;
+    setup_logging(in_systemd);
+
     let mut runtime = runtime::Builder::new_multi_thread();
     runtime.enable_all().thread_name("hickory-server-runtime");
     runtime.worker_threads(8);
@@ -115,8 +119,9 @@ fn main() -> Result<(), String> {
     }
 
     info!("server starting up, awaiting connections...");
-    if sd_notify::booted().unwrap_or(false) {
-        sd_notify::notify(true, &[NotifyState::Ready]).unwrap();
+
+    if in_systemd {
+        sd_notify::notify(false, &[NotifyState::Ready]).unwrap();
     }
     &server.register_watchdog_feeder();
     match runtime.block_on(server.block_until_done()) {
@@ -136,6 +141,20 @@ fn main() -> Result<(), String> {
     };
 
     Ok(())
+}
+
+fn setup_logging(in_systemd: bool) {
+    let systemd_format = fmt::format()
+        .without_time();
+
+    let mut fmt = tracing_subscriber::fmt()
+        .event_format(systemd_format);
+
+    if in_systemd {
+        fmt.init();
+    } else {
+        tracing_subscriber::fmt().init()
+    }
 }
 
 /// Build a UdpSocket for a given IP, port pair; IPv6 sockets will not accept v4 connections

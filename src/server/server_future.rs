@@ -63,7 +63,7 @@ impl<T: RequestHandler> ServerFuture<T> {
     pub fn register_watchdog_feeder(&mut self) {
         self.join_set.spawn(async {
             loop {
-                sd_notify::notify(true, &[NotifyState::Watchdog]).unwrap();
+                sd_notify::notify(false, &[NotifyState::Watchdog]).unwrap();
                 info!("Pet watchdog");
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
