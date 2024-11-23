@@ -36,6 +36,8 @@ Type=notify
 ImportCredential=network.dns
 ImportCredential=network.search_domains
 WatchdogSec=60min
+Environment=LAUNCHED_BY_SYSTEMD=1
+Environment=MIAUW=1
 
 [Install]
 WantedBy=sysinit.target
