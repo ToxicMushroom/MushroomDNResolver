@@ -50,7 +50,7 @@ pub mod dnssec {
 
 fn main() -> Result<(), String> {
     // Construct a new Resolver with default configuration options
-    let in_systemd = option_env!("LAUNCHED_BY_SYSTEMD").unwrap_or("0") == "1";
+    let in_systemd = true;
     setup_logging(in_systemd);
 
     let mut runtime = runtime::Builder::new_multi_thread();
@@ -122,8 +122,9 @@ fn main() -> Result<(), String> {
 
     if in_systemd {
         sd_notify::notify(false, &[NotifyState::Ready]).unwrap();
+        &server.register_watchdog_feeder();
     }
-    &server.register_watchdog_feeder();
+
     match runtime.block_on(server.block_until_done()) {
         Ok(()) => {
             // we're exiting for some reason...
