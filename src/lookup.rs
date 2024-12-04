@@ -22,18 +22,15 @@ pub(crate) async fn hickory_lookup(
     x0: &String,
     record_type: RecordType,
 ) -> Result<Lookup, ResolveError> {
-    let mut resolver_opts = ResolverOpts::default();
-    resolver_opts.try_tcp_on_error = false;
-
     let ipv6_support = is_ipv6_enabled();
 
     let final_resolver = if x0.ends_with("nordvpn.com.") {
         let mut resolver_config = ResolverConfig::new();
-        try_adding_ns_from_dhcp(&mut resolver_config, ipv6_support);
+        try_adding_ns_from_dhcp(&mut resolver_config, false);
 
         if resolver_config.name_servers().is_empty() {
             for ns in NameServerConfigGroup::google().iter() {
-                if ipv6_support || ns.socket_addr.is_ipv4() {
+                if ns.socket_addr.is_ipv4() {
                     resolver_config.add_name_server(ns.clone())
                 }
             }
@@ -44,11 +41,17 @@ pub(crate) async fn hickory_lookup(
             x0,
             resolver_config.name_servers()
         );
+
+        let mut resolver_opts = ResolverOpts::default();
+        resolver_opts.shuffle_dns_servers = true;
+        resolver_opts.try_tcp_on_error = false;
         &TokioResolver::tokio(resolver_config, resolver_opts)
     } else {
         if ipv6_support {
+            info!("Looking up {} via all nameservers", x0);
             &mushroom.resolver
         } else {
+            info!("Looking up {} via ipv4 nameservers", x0);
             &mushroom.ipv4_resolver
         }
     };
@@ -66,6 +69,11 @@ fn is_ipv6_enabled() -> bool {
         .unwrap_or(CtlValue::String("1".to_string()));
     disabled == CtlValue::String("0".to_string())
 }
+
+// #[test]
+// fn test_ipv6() {
+//     assert!(!is_ipv6_enabled());
+// }
 
 fn try_adding_ns_from_dhcp(resolver_config: &mut ResolverConfig, ipv6_support: bool) {
     let dbus_connection = Connection::new_system();

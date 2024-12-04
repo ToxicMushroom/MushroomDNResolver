@@ -26,7 +26,6 @@ use tracing::{debug, info, warn};
 #[cfg(all(feature = "dns-over-openssl", not(feature = "dns-over-rustls")))]
 use hickory_proto::openssl::tls_server::*;
 
-use crate::lookup::hickory_lookup;
 use crate::{
     access::AccessControl,
     authority::{MessageRequest, MessageResponseBuilder},

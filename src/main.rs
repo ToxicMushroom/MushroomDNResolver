@@ -17,7 +17,6 @@ use tokio::net::UdpSocket;
 use tokio::runtime;
 use tracing::{error, info};
 use tracing_subscriber::fmt;
-use tracing_subscriber::fmt::FormatEvent;
 
 /// Low-level types for DNSSEC operations
 #[cfg(feature = "dnssec")]
@@ -122,7 +121,7 @@ fn main() -> Result<(), String> {
 
     if in_systemd {
         sd_notify::notify(false, &[NotifyState::Ready]).unwrap();
-        &server.register_watchdog_feeder();
+        server.register_watchdog_feeder();
     }
 
     match runtime.block_on(server.block_until_done()) {
@@ -148,7 +147,7 @@ fn setup_logging(in_systemd: bool) {
     let systemd_format = fmt::format()
         .without_time();
 
-    let mut fmt = tracing_subscriber::fmt()
+    let fmt = tracing_subscriber::fmt()
         .event_format(systemd_format);
 
     if in_systemd {
