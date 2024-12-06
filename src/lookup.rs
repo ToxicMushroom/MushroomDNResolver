@@ -21,7 +21,7 @@ pub(crate) async fn hickory_lookup(
     mushroom: &Mushroom,
     x0: &String,
     record_type: RecordType,
-) -> Result<Lookup, ResolveError> {
+) -> (Result<Lookup, ResolveError>, bool) {
     let mut resolver_opts = ResolverOpts::default();
     resolver_opts.try_tcp_on_error = false;
 
@@ -52,7 +52,7 @@ pub(crate) async fn hickory_lookup(
             &mushroom.ipv4_resolver
         }
     };
-    final_resolver.lookup(x0, record_type).await
+    (final_resolver.lookup(x0, record_type).await, ipv6_support)
 }
 
 fn is_ipv6_enabled() -> bool {

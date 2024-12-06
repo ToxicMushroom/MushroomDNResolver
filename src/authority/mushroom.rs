@@ -19,7 +19,7 @@ impl RequestHandler for Mushroom {
     ) -> ResponseInfo {
         let x = request.request_info().query;
         let now = Instant::now();
-        let result = hickory_lookup(self, &x.name().to_string(), x.query_type()).await;
+        let (result, ipv6_enabled) = hickory_lookup(self, &x.name().to_string(), x.query_type()).await;
         let lookup_time = now.elapsed().as_millis();
 
         let mb = MessageResponseBuilder::new(Some(request.raw_query()));
@@ -36,7 +36,7 @@ impl RequestHandler for Mushroom {
                     vec![].into_iter(),
                 );
                 response_handle
-                    .send_response(message_response, lookup_time)
+                    .send_response(message_response, lookup_time, ipv6_enabled)
                     .await
                     .expect("being able to send a dns response")
             }
@@ -45,7 +45,7 @@ impl RequestHandler for Mushroom {
                     let message_response =
                         mb.build_no_records(Header::response_from_request(request.header()));
                     response_handle
-                        .send_response(message_response, lookup_time)
+                        .send_response(message_response, lookup_time, ipv6_enabled)
                         .await
                         .expect("being able to send a dns response")
                 } else {
@@ -53,7 +53,7 @@ impl RequestHandler for Mushroom {
                     let message_response =
                         mb.build_no_records(Header::response_from_request(request.header()));
                     response_handle
-                        .send_response(message_response, lookup_time)
+                        .send_response(message_response, lookup_time, ipv6_enabled)
                         .await
                         .expect("being able to send a dns response")
                 }

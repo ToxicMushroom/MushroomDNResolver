@@ -1004,8 +1004,9 @@ impl<R: ResponseHandler> ResponseHandler for ReportingResponseHandler<R> {
             impl Iterator<Item=&'a Record> + Send + 'a,
         >,
         millis: u128,
+        ipv6_enabled: bool
     ) -> io::Result<super::ResponseInfo> {
-        let response_info = self.handler.send_response(response, millis).await?;
+        let response_info = self.handler.send_response(response, millis, ipv6_enabled).await?;
 
         let id = self.request_header.id();
         let rid = response_info.id();
@@ -1020,12 +1021,12 @@ impl<R: ResponseHandler> ResponseHandler for ReportingResponseHandler<R> {
         let additional_count = response_info.additional_count();
         let response_code = response_info.response_code();
 
-        info!("request:{id} ms:{millis} src:{proto}://{addr}#{port} {op}:{query}:{qtype}:{class} qflags:{qflags} response:{code:?} rr:{answers}/{authorities}/{additionals} rflags:{rflags}",
+        info!("request:{id} ipv6:{ipv6_enabled} ms:{millis} {op}:{query}:{qtype}:{class} qflags:{qflags} response:{code:?} rr:{answers}/{authorities}/{additionals} rflags:{rflags}",
             id = rid,
             millis = millis,
-            proto = self.protocol,
-            addr = self.src_addr.ip(),
-            port = self.src_addr.port(),
+            // proto = self.protocol,
+            // addr = self.src_addr.ip(),
+            // port = self.src_addr.port(),
             op = self.request_header.op_code(),
             query = self.query.name(),
             qtype = self.query.query_type(),
@@ -1132,7 +1133,7 @@ pub(crate) async fn handle_request<R: ResponseHandler, T: RequestHandler>(
 
         let response = MessageResponseBuilder::new(None);
         let result = reporter
-            .send_response(response.error_msg(&header, response_code), 0)
+            .send_response(response.error_msg(&header, response_code), 0, true)
             .await;
 
         if let Err(e) = result {

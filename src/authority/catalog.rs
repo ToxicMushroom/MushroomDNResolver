@@ -61,7 +61,7 @@ async fn send_response<'a, R: ResponseHandler>(
         response.set_edns(resp_edns);
     }
 
-    response_handle.send_response(response, 0).await
+    response_handle.send_response(response, 0, true,).await
 }
 
 #[async_trait::async_trait]
@@ -107,7 +107,7 @@ impl RequestHandler for Catalog {
 
                 // TODO: should ResponseHandle consume self?
                 let result = response_handle
-                    .send_response(response.build_no_records(response_header), 0)
+                    .send_response(response.build_no_records(response_header), 0, true,)
                     .await;
 
                 // couldn't handle the request
@@ -147,6 +147,7 @@ impl RequestHandler for Catalog {
                         .send_response(
                             response.error_msg(request.header(), ResponseCode::NotImp),
                             0,
+                            true,
                         )
                         .await
                 }
@@ -159,6 +160,7 @@ impl RequestHandler for Catalog {
                     .send_response(
                         response.error_msg(request.header(), ResponseCode::FormErr),
                         0,
+                        true,
                     )
                     .await
             }
