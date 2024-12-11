@@ -98,7 +98,8 @@ fn main() -> Result<(), String> {
         }
     }
 
-    let resolver = TokioResolver::tokio(resolver_config, opts.clone());
+    // Fuck nordvpn 🖕
+    let resolver = TokioResolver::tokio(ipv4_resolver_config.clone(), opts.clone());
     let ipv4_resolver = TokioResolver::tokio(ipv4_resolver_config, opts);
     let mushroom = Mushroom { resolver, ipv4_resolver };
     let deny_networks = &[];

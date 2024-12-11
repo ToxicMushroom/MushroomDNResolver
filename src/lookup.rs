@@ -62,6 +62,7 @@ pub(crate) async fn hickory_lookup(
 }
 
 fn is_ipv6_enabled() -> bool {
+    return false; // fuck nordvpn,
     let disabled: CtlValue = sysctl::Ctl::new("net.ipv6.conf.all.disable_ipv6")
         .map(|v|
             {
@@ -71,6 +72,7 @@ fn is_ipv6_enabled() -> bool {
         )
         .unwrap_or(CtlValue::String("1".to_string()));
     disabled == CtlValue::String("0".to_string())
+
 }
 
 // #[test]
